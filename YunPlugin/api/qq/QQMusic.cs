@@ -213,13 +213,24 @@ namespace YunPlugin.api.qq
 
             if (numOfSongs > 100)
             {
-                await ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]");
+                try { await ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
             }
 
             var musicList = new List<MusicInfo>();
             foreach (var song in musics.data.list)
             {
                 var musicInfo = new QQMusicInfo(httpClient, song.mid);
+                musicInfo.Name = song.name;
+                if (song.singer != null)
+                {
+                    foreach (var s in song.singer)
+                    {
+                        if (!string.IsNullOrEmpty(s.name) && !musicInfo.Author.ContainsKey(s.name))
+                        {
+                            musicInfo.Author.Add(s.name, s.mid);
+                        }
+                    }
+                }
                 musicList.Add(musicInfo);
             }
             return new PlayListMeta(id, name, $"https://y.qq.com/n/ryqq/albumDetail/{id}", image, musicList);
@@ -294,13 +305,24 @@ namespace YunPlugin.api.qq
 
             if (numOfSongs > 100)
             {
-                await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]");
+                try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
             }
 
             var musicList = new List<MusicInfo>();
             foreach (var song in info.data.songlist)
             {
                 var musicInfo = new QQMusicInfo(httpClient, song.songmid);
+                musicInfo.Name = song.songname;
+                if (song.singer != null)
+                {
+                    foreach (var s in song.singer)
+                    {
+                        if (!string.IsNullOrEmpty(s.name) && !musicInfo.Author.ContainsKey(s.name))
+                        {
+                            musicInfo.Author.Add(s.name, s.mid);
+                        }
+                    }
+                }
                 musicList.Add(musicInfo);
             }
             return new PlayListMeta(id, name, $"https://y.qq.com/n/ryqq/playlist/{id}", image, musicList);

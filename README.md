@@ -74,6 +74,13 @@ Cookie登录:
 
 - `!here {密码}`: 让机器人前往当前频道，需要在服务器聊天框发送
 
+### Web 界面
+
+插件提供了一个简单的 Web 界面用于查看播放状态和进行基础控制。
+默认端口为 8080，可以在配置文件中修改 `HttpPort`。
+如果设置了 `WebPassword`，则需要输入密码才能访问。
+访问地址：`http://BotIP:8080`
+
 ### TS 频道描述(复制代码到频道描述)
 
 ```
@@ -106,6 +113,8 @@ Cookie登录:
   "Version": 1, // 配置版本 请勿修改
   "PlayMode": "RandomPlay", // 播放模式
   "AutoPause": true, // 无人自动暂停
+  "HttpPort": 8080, // Web 界面端口
+  "WebPassword": "", // Web 界面密码 (留空则不需密码)
   "DefaultApi": "Netease", // 默认API
   "Apis": [ // API 配置
     {

@@ -17,10 +17,11 @@ using TSLib.Full;
 using TSLib.Full.Book;
 using TSLib.Messages;
 using YunPlugin.api;
+using YunPlugin.web;
 
 namespace YunPlugin
 {
-    public class YunPlugin : IBotPlugin /* or ICorePlugin */
+    public class YunPlugin : IBotPlugin
     {
         private static YunPlugin Instance;
         public static Config config;
@@ -43,6 +44,8 @@ namespace YunPlugin
         private Connection serverView;
         private PlayControl playControl;
         private SemaphoreSlim slimlock = new SemaphoreSlim(1, 1);
+        private HttpServer httpServer;
+        private YunService _yunService;
 
         TsFullClient TS3FullClient { get; set; }
         public Player PlayerConnection { get; set; }
@@ -65,6 +68,8 @@ namespace YunPlugin
             musicApiInterfaces = new Dictionary<MusicApiType, IMusicApiInterface>();
             playControl = new PlayControl(playManager, ts3Client, Log);
             loadConfig(playControl);
+            
+            _yunService = new YunService(playControl, config, musicApiInterfaces, playManager, ts3Client, PlayerConnection);
 
             playManager.AfterResourceStarted += PlayManager_AfterResourceStarted;
             playManager.PlaybackStopped += PlayManager_PlaybackStopped;
@@ -78,20 +83,10 @@ namespace YunPlugin
 
             _ = updateOwnChannel();
 
-            ts3Client.SendChannelMessage($"云音乐插件加载成功！Ver: {PluginVersion}");
-        }
+            httpServer = new HttpServer(_yunService, config.HttpPort);
+            httpServer.Start();
 
-        private IMusicApiInterface GetApiInterface(MusicApiType type = MusicApiType.None)
-        {
-            if (type == MusicApiType.None)
-            {
-                type = config.DefaultApi;
-            }
-            if (!musicApiInterfaces.ContainsKey(type))
-            {
-                throw new CommandException("未找到对应的API", CommandExceptionReason.CommandError);
-            }
-            return musicApiInterfaces[type];
+            ts3Client.SendChannelMessage($"云音乐插件加载成功！Ver: {PluginVersion}");
         }
 
         private void loadConfig(PlayControl playControl)
@@ -277,28 +272,9 @@ namespace YunPlugin
         }
 
         [Command("yun mode")]
-        public Task<string> PlayMode(int mode)
+        public async Task<string> PlayMode(int mode)
         {
-            if (Enum.IsDefined(typeof(Mode), mode))
-            {
-                Mode playMode = (Mode)mode;
-                playControl.SetMode(playMode);
-                config.PlayMode = playMode;
-                config.Save();
-
-                return Task.FromResult(playMode switch
-                {
-                    Mode.SeqPlay => "当前播放模式为顺序播放",
-                    Mode.SeqLoopPlay => "当前播放模式为顺序循环",
-                    Mode.RandomPlay => "当前播放模式为随机播放",
-                    Mode.RandomLoopPlay => "当前播放模式为随机循环",
-                    _ => "请输入正确的播放模式",
-                });
-            }
-            else
-            {
-                return Task.FromResult("请输入正确的播放模式");
-            }
+            return await _yunService.SetMode(mode);
         }
 
         [Command("yun gedan")]
@@ -306,38 +282,16 @@ namespace YunPlugin
         {
             try
             {
-                var input = ProcessArgs(data, "{平台} [歌单名/ID] {长度|max}");
-                var api = input.Api;
-                var raw = input.Data;
-                var inputData = input.InputData;
-                var listId = inputData.Id;
-
-                if (inputData.Type == MusicUrlType.None)
-                {
-                    var playlist = await api.SearchPlaylist(raw, 1);
-                    if (playlist.Count == 0)
-                    {
-                        return "未找到歌单";
-                    }
-                    listId = playlist[0].Id;
-                }
-                if (listId == null && inputData.Type != MusicUrlType.PlayList)
-                {
-                    return "未找到歌单";
-                }
-
-                var playListMeta = await api.GetPlayList(listId, input.Limit);
-                await ts3Client.SendChannelMessage($"歌单添加完毕：{playListMeta.Name} [{playListMeta.MusicList.Count}]");
-                playControl.SetPlayList(playListMeta);
-                await playControl.PlayNextMusic();
+                var input = _yunService.ProcessArgs(data);
+                var result = await _yunService.PlayPlaylist(input);
+                await ts3Client.SendChannelMessage(result);
+                return "开始播放歌单";
             }
             catch (Exception e)
             {
                 Log.Error(e, "play playlist fail");
                 return $"播放歌单失败 {e.Message}";
             }
-
-            return "开始播放歌单";
         }
 
         [Command("yun play")]
@@ -345,40 +299,8 @@ namespace YunPlugin
         {
             try
             {
-                var input = ProcessArgs(arguments, "{平台} [歌名/ID]", 2);
-                var api = input.Api;
-                var raw = input.Data;
-                var inputData = input.InputData;
-
-                switch (inputData.Type)
-                {
-                    case MusicUrlType.PlayList:
-                        return await CommandPlaylist(arguments);
-                    case MusicUrlType.Album:
-                        return await CommandAlbums(arguments);
-                }
-
-                MusicInfo music;
-                if (inputData.Type == MusicUrlType.None)
-                {
-                    var song = await api.SearchMusic(raw, 1);
-                    if (song.Count == 0)
-                    {
-                        return "未找到歌曲";
-                    }
-                    music = song[0];
-                }
-                else
-                {
-                    music = await api.GetMusicInfo(inputData.Id);
-                }
-                if (config.PlayMode != Mode.SeqPlay && config.PlayMode != Mode.RandomPlay)
-                {
-                    // 如不是顺序播放或随机播放，添加到播放列表尾
-                    playControl.AddMusic(music, false);
-                }
-                await playControl.PlayMusic(music);
-                return null;
+                var input = _yunService.ProcessArgs(arguments, 2);
+                return await _yunService.Play(input);
             }
             catch (Exception e)
             {
@@ -392,27 +314,8 @@ namespace YunPlugin
         {
             try
             {
-                var input = ProcessArgs(arguments, "{平台} [歌名/ID]", 2);
-                var api = input.Api;
-                var raw = input.Data;
-                var inputData = input.InputData;
-
-                MusicInfo music;
-                if (inputData.Type == MusicUrlType.None)
-                {
-                    var song = await api.SearchMusic(raw, 1);
-                    if (song.Count == 0)
-                    {
-                        return "未找到歌曲";
-                    }
-                    music = song[0];
-                }
-                else
-                {
-                    music = await api.GetMusicInfo(inputData.Id);
-                }
-                playControl.AddMusic(music);
-                return "已添加到下一首播放";
+                var input = _yunService.ProcessArgs(arguments, 2);
+                return await _yunService.Add(input);
             }
             catch (Exception e)
             {
@@ -449,14 +352,8 @@ namespace YunPlugin
             try
             {
                 var args = Utils.ProcessArgs(arguments);
-                var api = config.GetApiConfig(args[0]);
-                if (api == null)
-                {
-                    return $"未找到对应的API [{args[0]}]";
-                }
-                var apiInterface = GetApiInterface(api.Type);
-                args = args.Skip(1).ToArray();
-                return await apiInterface.Login(args);
+                if (args.Length < 1) return "参数不足";
+                return await _yunService.Login(args[0], args.Skip(1).ToArray());
             }
             catch (Exception e)
             {
@@ -512,6 +409,7 @@ namespace YunPlugin
         [Command("here")]
         public async Task<string> CommandHere(ClientCall invoker, string password = null)
         {
+            // Simple bridge, but could also move to service if desired
             ChannelId channel = invoker.ChannelId.Value!;
             await ts3Client.MoveTo(channel, password);
             return "已移动到你所在的频道";
@@ -520,46 +418,24 @@ namespace YunPlugin
         [Command("yun zhuanji")]
         public async Task<string> CommandAlbums(string arguments)
         {
-            var input = ProcessArgs(arguments, "{平台} [专辑/ID] {长度|max}");
-            var api = input.Api;
-            var raw = input.Data;
-            var inputData = input.InputData;
-            var id = inputData.Id;
-
             try
             {
-                if (inputData.Type == MusicUrlType.None)
-                {
-                    var album = await api.SearchAlbum(raw, 1);
-                    if (album.Count == 0)
-                    {
-                        return "未找到专辑";
-                    }
-                    id = album[0].Id.ToString();
-                }
-
-                var albumDetail = await api.GetAlbums(id, input.Limit);
-                await ts3Client.SendChannelMessage($"专辑添加完毕：{albumDetail.Name} [{albumDetail.MusicList.Count}]");
-                playControl.SetPlayList(albumDetail);
-                await playControl.PlayNextMusic();
+                var input = _yunService.ProcessArgs(arguments);
+                var result = await _yunService.PlayAlbum(input);
+                await ts3Client.SendChannelMessage(result);
+                return "开始播放专辑";
             }
             catch (Exception e)
             {
                 Log.Error(e, "play album error");
                 return "播放专辑失败";
             }
-
-            return "开始播放专辑";
         }
 
         [Command("yun clear")]
         public async Task<string> CommandYunClear(PlayManager playManager)
         {
-            playControl.Clear();
-            if (playManager.IsPlaying)
-            {
-                await playManager.Stop();
-            }
+            _yunService.Clear();
             return "已清除歌单";
         }
 
@@ -568,7 +444,7 @@ namespace YunPlugin
         {
             if (playManager.IsPlaying)
             {
-                await playManager.Stop();
+                await _yunService.Stop();
                 return "已停止播放";
             }
             return "当前没有播放";
@@ -579,7 +455,7 @@ namespace YunPlugin
         {
             if (!playManager.IsPlaying)
             {
-                await playControl.PlayNextMusic();
+                await _yunService.PlayNextMusic();
                 return "开始播放";
             }
             return "当前正在播放";
@@ -587,6 +463,11 @@ namespace YunPlugin
 
         public void Dispose()
         {
+            if (httpServer != null)
+            {
+                httpServer.Dispose();
+                httpServer = null;
+            }
             Instance = null;
             config = null;
             playControl = null;
@@ -603,118 +484,5 @@ namespace YunPlugin
             TS3FullClient.OnEachClientMoved -= OnEachClientMoved;
         }
 
-        public CommandArgs ProcessArgs(string args, string useHelp, int argsLen = 3)
-        {
-            // netease url max
-            // netease url
-            // url max
-            // url
-            var result = new CommandArgs();
-            var sp = Utils.ProcessArgs(Utils.RemoveBBCode(args));
-            if (sp.Length == 0)
-            {
-                throw new CommandException(useHelp, CommandExceptionReason.CommandError);
-            }
-            if (sp.Length > argsLen)
-            {
-                //throw new CommandException($"参数过多 {useHelp}", CommandExceptionReason.CommandError);
-                string[] newSP = new string[argsLen];
-                Array.Copy(sp, newSP, argsLen - 1);
-                newSP[argsLen - 1] = string.Join(" ", sp.Skip(argsLen - 1));
-                sp = newSP;
-            }
-
-            if (sp.Length >= 2 && (sp.Last() == "max" || (Utils.IsNumber(sp.Last()) && sp.Length <= 4)))
-            {
-                if (sp.Last() == "max")
-                {
-                    result.Limit = 0;
-                }
-                else
-                {
-                    result.Limit = int.Parse(sp.Last());
-                }
-                sp = sp.Take(sp.Length - 1).ToArray();
-            }
-
-            switch (sp.Length)
-            {
-                case 2:
-                    var api = config.GetApiConfig(sp[0]);
-                    if (api == null || !api.Enable)
-                    {
-                        throw new CommandException($"未找到对应的API [{sp[0]}]", CommandExceptionReason.CommandError);
-                    }
-                    result.Api = GetApiInterface(api.Type);
-                    sp = sp.Skip(1).ToArray();
-                    goto case 1;
-                case 1:
-                    result.Data = sp[0];
-                    if (result.Api == null)
-                    {
-                        foreach (var item in musicApiInterfaces)
-                        {
-                            foreach (var a in item.Value.KeyInUrl)
-                            {
-                                if (result.Data.Contains(a))
-                                {
-                                    result.Api = item.Value;
-                                    break;
-                                }
-                            }
-                            if (result.Api != null)
-                            {
-                                break;
-                            }
-                        }
-                        if (result.Api == null)
-                        {
-                            foreach (var item in musicApiInterfaces)
-                            {
-                                var input = item.Value.GetInputData(result.Data);
-                                if (input.Type != MusicUrlType.None)
-                                {
-                                    result.Api = item.Value;
-                                    result.InputData = input;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (result.Api == null)
-                    {
-                        result.Api = GetApiInterface();
-                    }
-                    if (result.InputData == null)
-                    {
-                        result.InputData = result.Api.GetInputData(result.Data);
-                    }
-
-                    break;
-            }
-
-            return result;
-        }
-    }
-
-    public class CommandArgs
-    {
-        public IMusicApiInterface Api { get; set; }
-        public MusicApiInputData InputData { get; set; }
-        public string Data { get; set; }
-        public int Limit { get; set; }
-
-        public CommandArgs()
-        {
-            Api = null;
-            InputData = null;
-            Data = null;
-            Limit = 100;
-        }
-
-        public override string ToString()
-        {
-            return $"Api: {Api.Name} Data: {Data} Limit: {Limit}";
-        }
     }
 }

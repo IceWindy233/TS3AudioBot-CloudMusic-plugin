@@ -205,16 +205,29 @@ namespace YunPlugin.api.netease
 
             if (numOfSongs > 100)
             {
-                await ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]");
+                try { await ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
             }
 
             List<MusicInfo> list = new List<MusicInfo>();
             for (int i = 0; i < numOfSongs; i++)
             {
-                long musicid = albums.songs[i].id;
+                var song = albums.songs[i];
+                long musicid = song.id;
                 if (musicid > 0)
                 {
-                    list.Add(new NeteaseMusicInfo(httpClient, musicid.ToString()));
+                    var info = new NeteaseMusicInfo(httpClient, musicid.ToString());
+                    info.Name = song.name;
+                    if (song.ar != null)
+                    {
+                        foreach (var ar in song.ar)
+                        {
+                            if (!string.IsNullOrEmpty(ar.name) && !info.Author.ContainsKey(ar.name))
+                            {
+                                info.Author.Add(ar.name, ar.id.ToString());
+                            }
+                        }
+                    }
+                    list.Add(info);
                 }
             }
             return new PlayListMeta(id, name, $"https://music.163.com/#/album?id={id}", picUrl, list);
@@ -229,7 +242,7 @@ namespace YunPlugin.api.netease
             string name = playListInfo.playlist.name;
             string imgUrl = playListInfo.playlist.coverImgUrl;
 
-            await ts3Client.ChangeDescription(name);
+            try { await ts3Client.ChangeDescription(name); } catch { }
             try
             {
                 await MainCommands.CommandBotAvatarSet(ts3Client, imgUrl);
@@ -237,7 +250,7 @@ namespace YunPlugin.api.netease
             {
                 LogError(e, "Set avatar error");
             }
-            await ts3Client.SendChannelMessage($"开始添加歌单 [{name}]");
+            try { await ts3Client.SendChannelMessage($"开始添加歌单 [{name}]"); } catch { }
 
             List<MusicInfo> musicInfos = new List<MusicInfo>();
             if (playListInfo.playlist.trackCount == 0)
@@ -258,17 +271,30 @@ namespace YunPlugin.api.netease
                 }
                 if (numOfSongs > 100)
                 {
-                    await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]");
+                    try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
                 }
                 for (int i = 0; i < numOfSongs; i++)
                 {
-                    long musicid = playListTrackInfo.songs[i].id;
+                    var song = playListTrackInfo.songs[i];
+                    long musicid = song.id;
                     if (musicid > 0)
                     {
-                        musicInfos.Add(new NeteaseMusicInfo(httpClient, musicid.ToString()));
+                        var info = new NeteaseMusicInfo(httpClient, musicid.ToString());
+                        info.Name = song.name;
+                        if (song.ar != null)
+                        {
+                            foreach (var ar in song.ar)
+                            {
+                                if (!string.IsNullOrEmpty(ar.name) && !info.Author.ContainsKey(ar.name))
+                                {
+                                    info.Author.Add(ar.name, ar.id.ToString());
+                                }
+                            }
+                        }
+                        musicInfos.Add(info);
                     }
 
-                    await ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{numOfSongs}]");
+                    try { await ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{numOfSongs}]"); } catch { }
                 }
             }
             else
@@ -281,7 +307,7 @@ namespace YunPlugin.api.netease
                 }
                 if (trackCount > 100)
                 {
-                    await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{trackCount}]");
+                    try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{trackCount}]"); } catch { }
                 }
                 for (int i = 0; i < trackCount; i += limit)
                 {
@@ -291,10 +317,23 @@ namespace YunPlugin.api.netease
                        );
                     for (int j = 0; j < playListTrackInfo.songs.Length; j++)
                     {
-                        musicInfos.Add(new NeteaseMusicInfo(httpClient, playListTrackInfo.songs[j].id.ToString()));
+                        var song = playListTrackInfo.songs[j];
+                        var info = new NeteaseMusicInfo(httpClient, song.id.ToString());
+                        info.Name = song.name;
+                        if (song.ar != null)
+                        {
+                            foreach (var ar in song.ar)
+                            {
+                                if (!string.IsNullOrEmpty(ar.name) && !info.Author.ContainsKey(ar.name))
+                                {
+                                    info.Author.Add(ar.name, ar.id.ToString());
+                                }
+                            }
+                        }
+                        musicInfos.Add(info);
                     }
 
-                    await ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{trackCount}]");
+                    try { await ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{trackCount}]"); } catch { }
                 }
             }
 

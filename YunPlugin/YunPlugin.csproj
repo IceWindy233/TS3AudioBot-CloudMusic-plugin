@@ -23,4 +23,8 @@
 			<Private>false</Private>
 		</Reference>
 	</ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="web\index.html" />
+    </ItemGroup>
 </Project>

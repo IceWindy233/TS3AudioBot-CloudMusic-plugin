@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang='zh-CN'>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>TS3 云音乐控制</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 10px; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h1 { margin-top: 0; font-size: 1.5rem; text-align: center; color: #007bff; margin-bottom: 15px; }
+        
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 15px; }
+        .tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-weight: bold; color: #666; }
+        .tab.active { color: #007bff; border-bottom: 3px solid #007bff; margin-bottom: -2px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Controls */
+        .now-playing { text-align: center; margin-bottom: 20px; }
+        .song-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 5px; }
+        .artist { color: #666; font-size: 0.9rem; }
+        .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        
+        button { padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; white-space: nowrap; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.danger { background: #dc3545; }
+        button.danger:hover { background: #bd2130; }
+        button.secondary { background: #6c757d; }
+        button.secondary:hover { background: #5a6268; }
+        button.lg { padding: 10px 24px; font-size: 1rem; border-radius: 50px; }
+
+        .input-group { display: flex; gap: 5px; margin-bottom: 10px; }
+        input[type=text], input[type=number], input[type=password] { flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ced4da; }
+        
+        /* Playlist */
+        .playlist { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; }
+        .playlist li { padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+        .playlist li:last-child { border-bottom: none; }
+        .playlist li.active { color: #007bff; font-weight: bold; background: #f8f9fa; }
+
+        /* System */
+        .status-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .status-table th, .status-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; font-size: 0.9rem; }
+        .tag { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; color: white; }
+        .tag.green { background: #28a745; }
+        .tag.gray { background: #6c757d; }
+        
+        #message { position: fixed; top: 10px; right: 10px; padding: 10px 20px; border-radius: 4px; color: white; display: none; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .msg-success { background: #28a745; }
+        .msg-error { background: #dc3545; }
+
+        /* Auth Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal { background: white; padding: 20px; border-radius: 8px; width: 300px; text-align: center; }
+        .modal input { width: 90%; margin: 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .modal button { width: 100%; }
+    </style>
+</head>
+<body>
+    <div id='message'></div>
+    
+    <div id='authModal' class='modal-overlay'>
+        <div class='modal'>
+            <h3>需要密码</h3>
+            <p style='font-size:0.9rem; color:#666;'>管理员已启用访问控制</p>
+            <input type='password' id='authPassword' placeholder='请输入密码' onkeydown='if(event.key==="Enter") saveAuth()'>
+            <button onclick='saveAuth()'>确定</button>
+        </div>
+    </div>
+
+    <div class='card'>
+        <h1>TS3 云音乐控制</h1>
+        
+        <div class='tabs'>
+            <div class='tab active' onclick='switchTab("main")'>播放控制</div>
+            <div class='tab' onclick='switchTab("list")'>播放列表</div>
+            <div class='tab' onclick='switchTab("system")'>系统管理</div>
+        </div>
+
+        <!-- Main Tab -->
+        <div id='tab-main' class='tab-content active'>
+            <div class='now-playing'>
+                <div class='song-title' id='songName'>未播放</div>
+                <div class='artist' id='artistName'>-</div>
+            </div>
+
+            <div style='text-align:center; margin-bottom: 15px;'>
+                 <select id='modeSelect' onchange='setMode(this.value)'>
+                    <option value='0'>顺序播放</option>
+                    <option value='1'>顺序循环</option>
+                    <option value='2'>随机播放</option>
+                    <option value='3'>随机循环</option>
+                </select>
+            </div>
+
+            <div class='controls'>
+                <button onclick='control("stop")' class='danger lg'>⏹ 停止</button>
+                <button onclick='control("play")' class='secondary lg' id='playPauseBtn'>⏯ 暂停</button>
+                <button onclick='control("next")' class='lg'>⏭ 下一首</button>
+            </div>
+            
+            <hr style='border:0; border-top:1px solid #eee; margin: 15px 0;'>
+            
+            <h3 style='font-size:1rem; margin-top:0'>快速点歌</h3>
+            <div class='input-group'>
+                <select id='playType' style='flex:0 0 100px;'>
+                    <option value='auto'>自动识别</option>
+                    <option value='song'>单曲</option>
+                    <option value='list'>歌单</option>
+                    <option value='album'>专辑</option>
+                </select>
+                <input type='text' id='query' placeholder='名称、ID 或 链接'>
+            </div>
+            <div class='controls' style='justify-content: space-between;'>
+                <button onclick='cmd("play")' class='secondary' style='flex:1'>立即播放</button>
+                <div style='width:10px'></div>
+                <button onclick='cmd("add")' style='flex:1'>添加到队列</button>
+            </div>
+            <div style='font-size:0.8rem; color:#888; text-align: center; margin-top:5px;'>
+                注意: 播放歌单/专辑会覆盖当前列表
+            </div>
+        </div>
+
+        <!-- List Tab -->
+        <div id='tab-list' class='tab-content'>
+            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'>
+                <h3 style='margin:0; font-size:1rem;'>当前列表</h3>
+                <button onclick='control("clear")' class='danger' style='padding:4px 10px; font-size:0.8rem;'>清空列表</button>
+            </div>
+            <ul class='playlist' id='playlist'></ul>
+        </div>
+
+        <!-- System Tab -->
+        <div id='tab-system' class='tab-content'>
+            <h3 style='font-size:1rem; margin-top:0'>插件状态</h3>
+            <table class='status-table'>
+                <thead><tr><th>平台</th><th>API地址</th><th>登录用户</th></tr></thead>
+                <tbody id='statusBody'></tbody>
+            </table>
+
+            <hr style='border:0; border-top:1px solid #eee; margin: 15px 0;'>
+
+            <h3 style='font-size:1rem; margin-top:0'>账号登录</h3>
+            
+            <div class='input-group'>
+                <select id='loginPlatform' onchange='updateLoginMethods()' style='flex:1'>
+                    <option value='Netease'>网易云</option>
+                    <option value='QQMusic'>QQ音乐</option>
+                </select>
+                <select id='loginMethod' onchange='updateLoginInputs()' style='flex:1'>
+                    <!-- Dynamic -->
+                </select>
+            </div>
+            
+            <div id='loginInputs' style='margin-bottom:10px;'>
+                <!-- Dynamic Inputs -->
+            </div>
+            
+            <button onclick='doLogin()' style='width:100%'>登录</button>
+
+            <div style='font-size:0.8rem; color:#888; margin: 10px 0 15px 0;'>
+                提示: Cookie 登录请确保包含完整字段。扫码登录请留意控制台输出的二维码。
+            </div>
+
+            <hr style='border:0; border-top:1px solid #eee; margin: 15px 0;'>
+
+            <h3 style='font-size:1rem; margin-top:0'>Bot 管理</h3>
+            <div class='input-group'>
+                <input type='number' id='channelId' placeholder='目标频道 ID'>
+                <button onclick='moveBot()' class='secondary'>移动 Bot</button>
+            </div>
+             <div class='input-group' style='margin-top:10px'>
+                <button onclick='cmd("reload")' class='danger' style='width:100%'>重载配置文件</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isPaused = false;
+        let currentMode = -1;
+        let authToken = localStorage.getItem('yun_token') || '';
+
+        function saveAuth() {
+            const pwd = document.getElementById('authPassword').value;
+            if(pwd) {
+                authToken = pwd;
+                localStorage.setItem('yun_token', pwd);
+                document.getElementById('authModal').style.display = 'none';
+                updateStatus(); // Retry
+            }
+        }
+
+        async function fetchAPI(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            if (authToken) options.headers['X-Yun-Token'] = authToken;
+
+            try {
+                const res = await fetch(url, options);
+                if (res.status === 401) {
+                    document.getElementById('authModal').style.display = 'flex';
+                    throw new Error('Unauthorized');
+                }
+                return res;
+            } catch (e) {
+                console.error('API Error:', e);
+                throw e;
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            const tabs = document.querySelectorAll('.tab');
+            if(tabName=='main') tabs[0].classList.add('active');
+            if(tabName=='list') tabs[1].classList.add('active');
+            if(tabName=='system') { 
+                tabs[2].classList.add('active');
+                updateSystemStatus(); 
+            }
+            
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+
+        function showToast(msg, success) {
+            const el = document.getElementById('message');
+            el.innerText = msg;
+            el.className = success ? 'msg-success' : 'msg-error';
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 8000);
+        }
+
+        function updateStatus() {
+            fetchAPI('/api/status').then(r => r.json()).then(data => {
+                const current = data.current;
+                document.getElementById('songName').innerText = current ? current.name : '未播放';
+                document.getElementById('artistName').innerText = current ? current.artist : '-';
+                
+                if (currentMode !== data.modeVal) {
+                    currentMode = data.modeVal;
+                    document.getElementById('modeSelect').value = currentMode;
+                }
+                
+                isPaused = data.paused;
+                document.getElementById('playPauseBtn').innerText = isPaused ? '▶️ 继续' : '⏸ 暂停';
+
+                const list = document.getElementById('playlist');
+                list.innerHTML = '';
+                if (current) {
+                     const li = document.createElement('li');
+                     li.className = 'active';
+                     li.innerHTML = '<span>' + current.name + ' - ' + current.artist + '</span><span class="tag green">播放中</span>';
+                     list.appendChild(li);
+                }
+                data.playlist.forEach((item, i) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = '<span>' + (i+1) + '. ' + item.name + ' - ' + item.artist + '</span>';
+                    list.appendChild(li);
+                });
+            }).catch(console.error);
+        }
+
+        function updateSystemStatus() {
+            fetchAPI('/api/system').then(r => r.json()).then(data => {
+                const tbody = document.getElementById('statusBody');
+                tbody.innerHTML = '';
+                data.forEach(api => {
+                    const tr = document.createElement('tr');
+                    const userHtml = api.user ? 
+                        '<span class="tag green">' + api.user.name + '</span>' : 
+                        '<span class="tag gray">未登录</span>';
+                    tr.innerHTML = '<td>' + api.name + '</td><td>' + api.server + '</td><td>' + userHtml + '</td>';
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        function control(action) {
+            if (action === 'play') action = isPaused ? 'resume' : 'pause';
+            fetchAPI('/api/control?action=' + action, { method: 'POST' }).then(r => r.json()).then(d => {
+                if(d.success) {
+                    setTimeout(updateStatus, 100);
+                    if(action=='clear') showToast('列表已清空', true);
+                } else {
+                    showToast(d.error || '操作失败', false);
+                }
+            });
+        }
+        
+        function setMode(mode) {
+            fetchAPI('/api/setmode?mode=' + mode, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => showToast(d.success ? d.msg : d.error, d.success));
+        }
+
+        function cmd(action) {
+            const q = document.getElementById('query').value;
+            if (action !== 'reload' && !q) { showToast('请输入内容', false); return; }
+            
+            let type = action;
+            if (action === 'play' || action === 'add') {
+                const subType = document.getElementById('playType').value;
+                type = action + '_' + subType;
+            }
+
+            let url = '/api/cmd?type=' + type;
+            if (q) url += '&query=' + encodeURIComponent(q);
+
+            fetchAPI(url, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(data.msg || '操作成功', true);
+                        if(type !== 'reload') document.getElementById('query').value = '';
+                        updateStatus();
+                    } else {
+                        showToast(data.error, false);
+                    }
+                })
+                .catch(() => showToast('请求失败', false));
+        }
+
+        function doLogin() {
+            const platform = document.getElementById('loginPlatform').value;
+            const method = document.getElementById('loginMethod').value;
+            let args = '';
+
+            if (method === 'phone') {
+                const p = document.getElementById('inp_phone').value;
+                const pwd = document.getElementById('inp_pwd').value;
+                if(!p || !pwd) { showToast('请填写完整', false); return; }
+                args = 'phone ' + p + ' ' + pwd;
+            } 
+            else if (method === 'sms') {
+                 const p = document.getElementById('inp_phone').value;
+                 const c = document.getElementById('inp_captcha').value;
+                 if(!p || !c) { showToast('请填写完整', false); return; }
+                 args = 'sms ' + p + ' ' + c;
+            }
+            else if (method === 'cookie') {
+                let c = document.getElementById('inp_cookie').value;
+                if(!c) { showToast('请输入Cookie', false); return; }
+                // Escape quotes if needed, but usually just wrapping in quotes is enough for ProcessArgs
+                // If cookie contains double quotes, replace them with single quotes or escape them
+                c = c.replace(/"/g, "'"); 
+                args = 'cookie "' + c + '"';
+            }
+            else if (method === 'qr') {
+                args = 'qr';
+            }
+            else {
+                showToast('未知登录方式', false);
+                return;
+            }
+
+            showToast('登录中...', true);
+            fetchAPI('/api/login', { 
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ platform: platform, args: args })
+            })
+            .then(r => r.json())
+            .then(d => {
+                showToast(d.success ? '登录返回: ' + d.msg : '登录失败: ' + d.error, d.success);
+                updateSystemStatus();
+            });
+        }
+
+        const LOGIN_METHODS = {
+            'Netease': [
+                { val: 'phone', txt: '手机号+密码' },
+                { val: 'sms', txt: '手机号+验证码' },
+                { val: 'qr', txt: '扫码登录' },
+                { val: 'cookie', txt: 'Cookie' }
+            ],
+            'QQMusic': [
+                { val: 'cookie', txt: 'Cookie' }
+            ]
+        };
+
+        function updateLoginMethods() {
+            const platform = document.getElementById('loginPlatform').value;
+            const select = document.getElementById('loginMethod');
+            select.innerHTML = '';
+            
+            LOGIN_METHODS[platform].forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.val;
+                opt.innerText = m.txt;
+                select.appendChild(opt);
+            });
+            updateLoginInputs();
+        }
+
+        function updateLoginInputs() {
+            const method = document.getElementById('loginMethod').value;
+            const container = document.getElementById('loginInputs');
+            container.innerHTML = '';
+
+            if (method === 'phone') {
+                container.innerHTML = `
+                    <div class="input-group"><input type="text" id="inp_phone" placeholder="手机号"></div>
+                    <div class="input-group"><input type="password" id="inp_pwd" placeholder="密码"></div>`;
+            } else if (method === 'sms') {
+                container.innerHTML = `
+                    <div class="input-group"><input type="text" id="inp_phone" placeholder="手机号"></div>
+                    <div class="input-group"><input type="text" id="inp_captcha" placeholder="验证码"></div>`;
+            } else if (method === 'cookie') {
+                container.innerHTML = `
+                    <div class="input-group"><input type="text" id="inp_cookie" placeholder="在此粘贴 Cookie 字符串"></div>`;
+            } else if (method === 'qr') {
+                container.innerHTML = `<div style="text-align:center; padding:10px; color:#666;">点击登录后，请查看控制台输出的二维码</div>`;
+            }
+        }
+
+        // Init
+        updateLoginMethods();
+
+        function moveBot() {
+            const id = document.getElementById('channelId').value;
+            if(!id) return;
+            fetchAPI('/api/control?action=move&channel=' + id, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => showToast(d.success ? '已移动' : d.error, d.success));
+        }
+
+        setInterval(updateStatus, 2000);
+        updateStatus();
+    </script>
+</body>
+</html>

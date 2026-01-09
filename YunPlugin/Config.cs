@@ -43,6 +43,8 @@ namespace YunPlugin
         [JsonConverter(typeof(StringEnumConverter))]
         public Mode PlayMode { get; set; }
         public bool AutoPause { get; set; }
+        public int HttpPort { get; set; } = 8080;
+        public string WebPassword { get; set; } = "";
         [JsonConverter(typeof(StringEnumConverter))]
         public MusicApiType DefaultApi { get; set; }
         public List<ApiContainer> Apis { get; set; }
