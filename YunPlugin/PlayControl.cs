@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using TS3AudioBot;
 using TS3AudioBot.Audio;
@@ -18,12 +19,26 @@ public class PlayControl
     private int currentPlay = 0;
     private MusicInfo currentPlayMusicInfo;
     private PlayListMeta playListMeta;
+    private TaskScheduler mainScheduler;
 
     public PlayControl(PlayManager playManager, Ts3Client ts3Client, NLog.Logger log)
     {
         Log = log;
         this.playManager = playManager;
         this.ts3Client = ts3Client;
+        mainScheduler = TaskScheduler.Current;
+    }
+
+    private async Task RunOnMainThread(Func<Task> action)
+    {
+        if (mainScheduler != null && TaskScheduler.Current != mainScheduler)
+        {
+            await Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.None, mainScheduler).Unwrap();
+        }
+        else
+        {
+            await action();
+        }
     }
 
     public MusicInfo GetCurrentPlayMusicInfo()
@@ -127,14 +142,14 @@ public class PlayControl
 
             if (musicUrl.StartsWith("error"))
             {
-                await ts3Client.SendChannelMessage($"音乐链接获取失败 [{musicInfo.Name}] {musicUrl}");
+                await RunOnMainThread(() => ts3Client.SendChannelMessage($"音乐链接获取失败 [{musicInfo.Name}] {musicUrl}"));
                 await PlayNextMusic();
                 return;
             }
 
             await playManager.Play(invoker, new MediaPlayResource(musicUrl, musicInfo.GetMusicInfo(), await musicInfo.GetImage(), false));
 
-            try { await ts3Client.SendChannelMessage($"► 正在播放：{musicInfo.GetFullNameBBCode()}"); } catch { }
+            try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"► 正在播放：{musicInfo.GetFullNameBBCode()}")); } catch { }
 
             string desc;
             if (musicInfo.InPlayList)
@@ -145,10 +160,10 @@ public class PlayControl
             {
                 desc = musicInfo.GetFullName();
             }
-            try { await ts3Client.ChangeDescription(desc); } catch { }
+            try { await RunOnMainThread(() => ts3Client.ChangeDescription(desc)); } catch { }
             try
             {
-                await MainCommands.CommandBotAvatarSet(ts3Client, musicInfo.Image);
+                await RunOnMainThread(() => MainCommands.CommandBotAvatarSet(ts3Client, musicInfo.Image));
             } catch (Exception e)
             {
                 Log.Error(e, "Set avatar error");
@@ -157,7 +172,7 @@ public class PlayControl
         catch (Exception e)
         {
             Log.Error(e, "PlayMusic error");
-            try { await ts3Client.SendChannelMessage($"播放音乐失败 [{musicInfo.Name}]"); } catch { }
+            try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"播放音乐失败 [{musicInfo.Name}]")); } catch { }
             await PlayNextMusic();
         }
     }

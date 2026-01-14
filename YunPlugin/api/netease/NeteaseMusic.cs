@@ -205,7 +205,7 @@ namespace YunPlugin.api.netease
 
             if (numOfSongs > 100)
             {
-                try { await ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
+                try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]")); } catch { }
             }
 
             List<MusicInfo> list = new List<MusicInfo>();
@@ -242,15 +242,15 @@ namespace YunPlugin.api.netease
             string name = playListInfo.playlist.name;
             string imgUrl = playListInfo.playlist.coverImgUrl;
 
-            try { await ts3Client.ChangeDescription(name); } catch { }
+            try { await RunOnMainThread(() => ts3Client.ChangeDescription(name)); } catch { }
             try
             {
-                await MainCommands.CommandBotAvatarSet(ts3Client, imgUrl);
+                await RunOnMainThread(() => MainCommands.CommandBotAvatarSet(ts3Client, imgUrl));
             } catch (Exception e)
             {
                 LogError(e, "Set avatar error");
             }
-            try { await ts3Client.SendChannelMessage($"开始添加歌单 [{name}]"); } catch { }
+            try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"开始添加歌单 [{name}]")); } catch { }
 
             List<MusicInfo> musicInfos = new List<MusicInfo>();
             if (playListInfo.playlist.trackCount == 0)
@@ -271,7 +271,7 @@ namespace YunPlugin.api.netease
                 }
                 if (numOfSongs > 100)
                 {
-                    try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
+                    try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]")); } catch { }
                 }
                 for (int i = 0; i < numOfSongs; i++)
                 {
@@ -294,7 +294,7 @@ namespace YunPlugin.api.netease
                         musicInfos.Add(info);
                     }
 
-                    try { await ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{numOfSongs}]"); } catch { }
+                    try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{numOfSongs}]")); } catch { }
                 }
             }
             else
@@ -307,7 +307,7 @@ namespace YunPlugin.api.netease
 
                 if (trackCount > 100)
                 {
-                    try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{trackCount}]"); } catch { }
+                    try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{trackCount}]")); } catch { }
                 }
 
                 int batchSize = 1000;
@@ -336,7 +336,7 @@ namespace YunPlugin.api.netease
                         musicInfos.Add(info);
                     }
 
-                    try { await ts3Client.SendChannelMessage($"已添加歌曲 [{Math.Min(i + batchSize, trackCount)}-{trackCount}]"); } catch { }
+                    try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"已添加歌曲 [{Math.Min(i + batchSize, trackCount)}-{trackCount}]")); } catch { }
                 }
             }
 
@@ -371,14 +371,14 @@ namespace YunPlugin.api.netease
                 string key = await GetLoginKey();
                 string qrimg = await GetLoginQRImage(key);
 
-                await ts3Client.SendChannelMessage("正在生成二维码");
-                await ts3Client.SendChannelMessage(qrimg);
+                await RunOnMainThread(() => ts3Client.SendChannelMessage("正在生成二维码"));
+                await RunOnMainThread(() => ts3Client.SendChannelMessage(qrimg));
                 LogDebug(qrimg);
                 string[] img = qrimg.Split(",");
                 byte[] bytes = Convert.FromBase64String(img[1]);
                 Stream stream = new MemoryStream(bytes);
-                await ts3Client.UploadAvatar(stream);
-                await ts3Client.ChangeDescription("请用网易云APP扫描二维码登录");
+                await RunOnMainThread(() => ts3Client.UploadAvatar(stream));
+                await RunOnMainThread(() => ts3Client.ChangeDescription("请用网易云APP扫描二维码登录"));
 
                 int i = 0;
                 long code;
@@ -405,8 +405,8 @@ namespace YunPlugin.api.netease
                         break;
                     }
                 }
-                await ts3Client.DeleteAvatar();
-                await ts3Client.ChangeDescription("网易云已登录");
+                await RunOnMainThread(() => ts3Client.DeleteAvatar());
+                await RunOnMainThread(() => ts3Client.ChangeDescription("网易云已登录"));
                 Cookie = Utils.ProcessCookie(cookies);
 
                 return result;

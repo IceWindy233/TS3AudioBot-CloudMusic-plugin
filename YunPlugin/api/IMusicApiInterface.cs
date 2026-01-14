@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using TS3AudioBot.Audio;
 using TS3AudioBot;
@@ -145,6 +146,7 @@ namespace YunPlugin.api
         public Connection serverView;
 
         public T Config;
+        protected TaskScheduler MainScheduler;
 
         private readonly NLog.Logger Log;
 
@@ -154,9 +156,22 @@ namespace YunPlugin.api
             this.ts3Client = ts3Client;
             this.serverView = serverView;
             Config = config;
+            MainScheduler = TaskScheduler.Current;
 
             Log = YunPlugin.GetLogger(GetType().Name);
             LogInfo($"Init {GetType().Name}");
+        }
+
+        protected async Task RunOnMainThread(Func<Task> action)
+        {
+            if (MainScheduler != null && TaskScheduler.Current != MainScheduler)
+            {
+                await Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.None, MainScheduler).Unwrap();
+            }
+            else
+            {
+                await action();
+            }
         }
 
         public void LogInfo(string msg)

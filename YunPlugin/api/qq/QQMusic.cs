@@ -213,7 +213,7 @@ namespace YunPlugin.api.qq
 
             if (numOfSongs > 100)
             {
-                try { await ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
+                try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"警告：专辑过大，可能需要一定的时间生成 [{numOfSongs}]")); } catch { }
             }
 
             var musicList = new List<MusicInfo>();
@@ -305,7 +305,7 @@ namespace YunPlugin.api.qq
 
             if (numOfSongs > 100)
             {
-                try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]"); } catch { }
+                try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{numOfSongs}]")); } catch { }
             }
 
             var musicList = new List<MusicInfo>();
