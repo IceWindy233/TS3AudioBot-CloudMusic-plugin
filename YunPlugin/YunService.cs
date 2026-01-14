@@ -356,7 +356,7 @@ namespace YunPlugin
         public object GetPlaybackStatus()
         {
             var current = _playControl.GetCurrentPlayMusicInfo();
-            var list = _playControl.GetNextPlayList(50);
+            var list = _playControl.GetNextPlayList(1000);
             var mode = _playControl.GetMode();
             
             return new
@@ -390,7 +390,7 @@ namespace YunPlugin
             Api = null;
             InputData = null;
             Data = null;
-            Limit = 100;
+            Limit = 1000;
         }
 
         public override string ToString()

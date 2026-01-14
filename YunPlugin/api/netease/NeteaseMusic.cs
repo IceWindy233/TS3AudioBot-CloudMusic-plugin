@@ -303,17 +303,20 @@ namespace YunPlugin.api.netease
                 if (limit != 0)
                 {
                     trackCount = Math.Min(playListInfo.playlist.trackCount, limit);
-                    limit = Math.Min(50, trackCount);
                 }
+
                 if (trackCount > 100)
                 {
                     try { await ts3Client.SendChannelMessage($"警告：歌单过大，可能需要一定的时间生成 [{trackCount}]"); } catch { }
                 }
-                for (int i = 0; i < trackCount; i += limit)
+
+                int batchSize = 1000;
+                for (int i = 0; i < trackCount; i += batchSize)
                 {
+                    int currentLimit = Math.Min(batchSize, trackCount - i);
                     PlayListTrackInfo playListTrackInfo = await httpClient.Get<PlayListTrackInfo>(
                             "/playlist/track/all",
-                            new Dictionary<string, string> { { "id", id }, { "limit", limit.ToString() }, { "offset", i.ToString() } }
+                            new Dictionary<string, string> { { "id", id }, { "limit", currentLimit.ToString() }, { "offset", i.ToString() } }
                        );
                     for (int j = 0; j < playListTrackInfo.songs.Length; j++)
                     {
@@ -333,7 +336,7 @@ namespace YunPlugin.api.netease
                         musicInfos.Add(info);
                     }
 
-                    try { await ts3Client.SendChannelMessage($"已添加歌曲 [{i + playListTrackInfo.songs.Length}-{trackCount}]"); } catch { }
+                    try { await ts3Client.SendChannelMessage($"已添加歌曲 [{Math.Min(i + batchSize, trackCount)}-{trackCount}]"); } catch { }
                 }
             }
 
