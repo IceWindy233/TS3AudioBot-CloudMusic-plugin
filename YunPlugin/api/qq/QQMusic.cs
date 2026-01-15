@@ -449,7 +449,19 @@ namespace YunPlugin.api.qq
             var list = new List<MusicInfo>();
             foreach (var music in search.data.list)
             {
-                list.Add(new QQMusicInfo(httpClient, music.songmid, false));
+                var info = new QQMusicInfo(httpClient, music.songmid, false);
+                info.Name = music.songname;
+                if (music.singer != null)
+                {
+                    foreach (var s in music.singer)
+                    {
+                        if (!string.IsNullOrEmpty(s.name))
+                        {
+                            info.Author.Add(s.name, s.mid);
+                        }
+                    }
+                }
+                list.Add(info);
             }
             return list;
         }

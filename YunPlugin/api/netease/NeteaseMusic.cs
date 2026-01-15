@@ -476,7 +476,19 @@ namespace YunPlugin.api.netease
             List<MusicInfo> list = new List<MusicInfo>();
             foreach (var song in searchResult.result.songs)
             {
-                list.Add(new NeteaseMusicInfo(httpClient, song.id.ToString(), false));
+                var info = new NeteaseMusicInfo(httpClient, song.id.ToString(), false);
+                info.Name = song.name;
+                if (song.artists != null)
+                {
+                    foreach (var artist in song.artists)
+                    {
+                        if (!string.IsNullOrEmpty(artist.name))
+                        {
+                            info.Author.Add(artist.name, artist.id.ToString());
+                        }
+                    }
+                }
+                list.Add(info);
             }
             return list;
         }

@@ -46,6 +46,7 @@ namespace YunPlugin
         private SemaphoreSlim slimlock = new SemaphoreSlim(1, 1);
         private HttpServer httpServer;
         private YunService _yunService;
+        private TaskScheduler mainScheduler;
 
         TsFullClient TS3FullClient { get; set; }
         public Player PlayerConnection { get; set; }
@@ -65,6 +66,7 @@ namespace YunPlugin
 
         public void Initialize()
         {
+            mainScheduler = TaskScheduler.Current;
             musicApiInterfaces = new Dictionary<MusicApiType, IMusicApiInterface>();
             playControl = new PlayControl(playManager, ts3Client, Log);
             loadConfig(playControl);
@@ -87,6 +89,18 @@ namespace YunPlugin
             httpServer.Start();
 
             ts3Client.SendChannelMessage($"云音乐插件加载成功！Ver: {PluginVersion}");
+        }
+
+        private async Task RunOnMainThread(Func<Task> action)
+        {
+            if (mainScheduler != null && TaskScheduler.Current != mainScheduler)
+            {
+                await Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.None, mainScheduler).Unwrap();
+            }
+            else
+            {
+                await action();
+            }
         }
 
         private void loadConfig(PlayControl playControl)
@@ -260,7 +274,7 @@ namespace YunPlugin
                 Log.Debug("上一首歌结束");
                 if (playControl.GetPlayList().Count == 0)
                 {
-                    await ts3Client.ChangeDescription("当前无正在播放歌曲");
+                    await RunOnMainThread(() => ts3Client.ChangeDescription("当前无正在播放歌曲"));
                     return;
                 }
                 await playControl.PlayNextMusic();

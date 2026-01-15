@@ -191,6 +191,7 @@ namespace YunPlugin
             else
             {
                 music = await api.GetMusicInfo(inputData.Id);
+                await music.InitMusicInfo();
             }
             
             _playControl.AddMusic(music);
@@ -361,7 +362,7 @@ namespace YunPlugin
             
             return new
             {
-                current = current == null ? null : new { name = current.Name, artist = current.GetAuthor() },
+                current = current == null ? null : new { name = current.Name, artist = current.GetAuthor(), image = current.Image },
                 playlist = list.ConvertAll(x => new { name = x.Name, artist = x.GetAuthor() }),
                 mode = mode.ToString(),
                 modeVal = (int)mode,

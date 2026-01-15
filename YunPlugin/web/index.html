@@ -83,6 +83,7 @@
         <!-- Main Tab -->
         <div id='tab-main' class='tab-content active'>
             <div class='now-playing'>
+                <img id='albumCover' src='' style='width: 120px; height: 120px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.15); margin-bottom: 15px; display: none; object-fit: cover;' alt='Album Art'>
                 <div class='song-title' id='songName'>未播放</div>
                 <div class='artist' id='artistName'>-</div>
             </div>
@@ -146,23 +147,20 @@
             <h3 style='font-size:1rem; margin-top:0'>账号登录</h3>
             
             <div class='input-group'>
-                <select id='loginPlatform' onchange='updateLoginMethods()' style='flex:1'>
+                <select id='loginPlatform' style='flex:1'>
                     <option value='Netease'>网易云</option>
                     <option value='QQMusic'>QQ音乐</option>
-                </select>
-                <select id='loginMethod' onchange='updateLoginInputs()' style='flex:1'>
-                    <!-- Dynamic -->
                 </select>
             </div>
             
             <div id='loginInputs' style='margin-bottom:10px;'>
-                <!-- Dynamic Inputs -->
+                 <div class="input-group"><input type="text" id="inp_cookie" placeholder="在此粘贴 Cookie 字符串"></div>
             </div>
             
             <button onclick='doLogin()' style='width:100%'>登录</button>
 
             <div style='font-size:0.8rem; color:#888; margin: 10px 0 15px 0;'>
-                提示: Cookie 登录请确保包含完整字段。扫码登录请留意控制台输出的二维码。
+                提示: Cookie 登录请确保包含完整字段。
             </div>
 
             <hr style='border:0; border-top:1px solid #eee; margin: 15px 0;'>
@@ -238,6 +236,14 @@
                 const current = data.current;
                 document.getElementById('songName').innerText = current ? current.name : '未播放';
                 document.getElementById('artistName').innerText = current ? current.artist : '-';
+                
+                const img = document.getElementById('albumCover');
+                if (current && current.image) {
+                    if (img.src !== current.image) img.src = current.image;
+                    img.style.display = 'inline-block';
+                } else {
+                    img.style.display = 'none';
+                }
                 
                 if (currentMode !== data.modeVal) {
                     currentMode = data.modeVal;
@@ -325,36 +331,13 @@
 
         function doLogin() {
             const platform = document.getElementById('loginPlatform').value;
-            const method = document.getElementById('loginMethod').value;
             let args = '';
 
-            if (method === 'phone') {
-                const p = document.getElementById('inp_phone').value;
-                const pwd = document.getElementById('inp_pwd').value;
-                if(!p || !pwd) { showToast('请填写完整', false); return; }
-                args = 'phone ' + p + ' ' + pwd;
-            } 
-            else if (method === 'sms') {
-                 const p = document.getElementById('inp_phone').value;
-                 const c = document.getElementById('inp_captcha').value;
-                 if(!p || !c) { showToast('请填写完整', false); return; }
-                 args = 'sms ' + p + ' ' + c;
-            }
-            else if (method === 'cookie') {
-                let c = document.getElementById('inp_cookie').value;
-                if(!c) { showToast('请输入Cookie', false); return; }
-                // Escape quotes if needed, but usually just wrapping in quotes is enough for ProcessArgs
-                // If cookie contains double quotes, replace them with single quotes or escape them
-                c = c.replace(/"/g, "'"); 
-                args = 'cookie "' + c + '"';
-            }
-            else if (method === 'qr') {
-                args = 'qr';
-            }
-            else {
-                showToast('未知登录方式', false);
-                return;
-            }
+            let c = document.getElementById('inp_cookie').value;
+            if(!c) { showToast('请输入Cookie', false); return; }
+            // Escape quotes if needed
+            c = c.replace(/"/g, "'"); 
+            args = 'cookie "' + c + '"';
 
             showToast('登录中...', true);
             fetchAPI('/api/login', { 
@@ -368,56 +351,6 @@
                 updateSystemStatus();
             });
         }
-
-        const LOGIN_METHODS = {
-            'Netease': [
-                { val: 'phone', txt: '手机号+密码' },
-                { val: 'sms', txt: '手机号+验证码' },
-                { val: 'qr', txt: '扫码登录' },
-                { val: 'cookie', txt: 'Cookie' }
-            ],
-            'QQMusic': [
-                { val: 'cookie', txt: 'Cookie' }
-            ]
-        };
-
-        function updateLoginMethods() {
-            const platform = document.getElementById('loginPlatform').value;
-            const select = document.getElementById('loginMethod');
-            select.innerHTML = '';
-            
-            LOGIN_METHODS[platform].forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.val;
-                opt.innerText = m.txt;
-                select.appendChild(opt);
-            });
-            updateLoginInputs();
-        }
-
-        function updateLoginInputs() {
-            const method = document.getElementById('loginMethod').value;
-            const container = document.getElementById('loginInputs');
-            container.innerHTML = '';
-
-            if (method === 'phone') {
-                container.innerHTML = `
-                    <div class="input-group"><input type="text" id="inp_phone" placeholder="手机号"></div>
-                    <div class="input-group"><input type="password" id="inp_pwd" placeholder="密码"></div>`;
-            } else if (method === 'sms') {
-                container.innerHTML = `
-                    <div class="input-group"><input type="text" id="inp_phone" placeholder="手机号"></div>
-                    <div class="input-group"><input type="text" id="inp_captcha" placeholder="验证码"></div>`;
-            } else if (method === 'cookie') {
-                container.innerHTML = `
-                    <div class="input-group"><input type="text" id="inp_cookie" placeholder="在此粘贴 Cookie 字符串"></div>`;
-            } else if (method === 'qr') {
-                container.innerHTML = `<div style="text-align:center; padding:10px; color:#666;">点击登录后，请查看控制台输出的二维码</div>`;
-            }
-        }
-
-        // Init
-        updateLoginMethods();
 
         function moveBot() {
             const id = document.getElementById('channelId').value;
