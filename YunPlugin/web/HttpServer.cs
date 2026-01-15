@@ -247,17 +247,6 @@ namespace YunPlugin.web
                 case "clear":
                     _yunService.Clear();
                     break;
-                case "move":
-                    string cid = req.QueryString["channel"];
-                    if (int.TryParse(cid, out int channelId))
-                    {
-                        await _yunService.MoveToChannel(channelId);
-                    }
-                    else
-                    {
-                        throw new Exception("Invalid Channel ID");
-                    }
-                    break;
                 default:
                     throw new Exception("Unknown action");
             }

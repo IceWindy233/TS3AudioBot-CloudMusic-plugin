@@ -294,11 +294,6 @@ namespace YunPlugin
             _ = Stop(); // Fire and forget stop
         }
 
-        public async Task MoveToChannel(int channelId, string password = null)
-        {
-            await _ts3Client.MoveTo(new TSLib.ChannelId((ulong)channelId), password);
-        }
-
         public async Task<string> SetMode(int mode)
         {
             if (Enum.IsDefined(typeof(Mode), mode))

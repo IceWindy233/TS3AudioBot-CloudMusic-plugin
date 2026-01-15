@@ -164,13 +164,6 @@
                 提示: Cookie 登录请确保包含完整字段。
             </div>
 
-            <hr style='border:0; border-top:1px solid #eee; margin: 15px 0;'>
-
-            <h3 style='font-size:1rem; margin-top:0'>Bot 管理</h3>
-            <div class='input-group'>
-                <input type='number' id='channelId' placeholder='目标频道 ID'>
-                <button onclick='moveBot()' class='secondary'>移动 Bot</button>
-            </div>
              <div class='input-group' style='margin-top:10px'>
                 <button onclick='cmd("reload")' class='danger' style='width:100%'>重载配置文件</button>
             </div>
@@ -351,14 +344,6 @@
                 showToast(d.success ? '登录返回: ' + d.msg : '登录失败: ' + d.error, d.success);
                 updateSystemStatus();
             });
-        }
-
-        function moveBot() {
-            const id = document.getElementById('channelId').value;
-            if(!id) return;
-            fetchAPI('/api/control?action=move&channel=' + id, { method: 'POST' })
-                .then(r => r.json())
-                .then(d => showToast(d.success ? '已移动' : d.error, d.success));
         }
 
         setInterval(updateStatus, 2000);
