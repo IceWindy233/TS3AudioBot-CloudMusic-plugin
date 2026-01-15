@@ -301,7 +301,7 @@ namespace YunPlugin.web
                     bool isAdd = type.StartsWith("add");
                     string subType = type.Split('_').Length > 1 ? type.Split('_')[1] : "auto";
 
-                    if (subType == "song" || subType == "auto" && !isAdd) 
+                    if (subType == "song" || subType == "podcast" || subType == "auto" && !isAdd) 
                     {
                         err = isAdd ? await _yunService.Add(input) : await _yunService.Play(input);
                     }

@@ -163,7 +163,7 @@ namespace YunPlugin
             }
             else
             {
-                music = await api.GetMusicInfo(inputData.Id);
+                music = await api.GetMusicInfo(inputData.Id, inputData.Type);
             }
 
             if (_config.PlayMode != Mode.SeqPlay && _config.PlayMode != Mode.RandomPlay)
@@ -190,7 +190,7 @@ namespace YunPlugin
             }
             else
             {
-                music = await api.GetMusicInfo(inputData.Id);
+                music = await api.GetMusicInfo(inputData.Id, inputData.Type);
                 await music.InitMusicInfo();
             }
             

@@ -26,6 +26,7 @@ namespace YunPlugin.api
         Music,
         PlayList,
         Album,
+        Podcast,
         Number
     }
 
@@ -222,7 +223,7 @@ namespace YunPlugin.api
         public abstract void Dispose();
 
         public abstract Task<PlayListMeta> GetAlbums(string id, int limit);
-        public abstract Task<MusicInfo> GetMusicInfo(string id);
+        public abstract Task<MusicInfo> GetMusicInfo(string id, MusicUrlType type = MusicUrlType.Music);
         public abstract Task<PlayListMeta> GetPlayList(string id, int limit);
         public abstract MusicApiInputData GetInputData(string url);
         public abstract Task<UserInfo> GetUserInfo();
@@ -260,7 +261,7 @@ namespace YunPlugin.api
         public Task<PlayListMeta> GetPlayList(string id, int limit);
         public Task<PlayListMeta> GetAlbums(string id, int limit);
 
-        public Task<MusicInfo> GetMusicInfo(string id);
+        public Task<MusicInfo> GetMusicInfo(string id, MusicUrlType type = MusicUrlType.Music);
 
         public Task<UserInfo?> GetUserInfo();
 

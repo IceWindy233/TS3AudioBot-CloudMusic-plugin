@@ -278,7 +278,7 @@ namespace YunPlugin.api.qq
             return result;
         }
 
-        public override Task<MusicInfo> GetMusicInfo(string id)
+        public override Task<MusicInfo> GetMusicInfo(string id, MusicUrlType type = MusicUrlType.Music)
         {
             return Task.FromResult<MusicInfo>(new QQMusicInfo(httpClient, id, false));
         }

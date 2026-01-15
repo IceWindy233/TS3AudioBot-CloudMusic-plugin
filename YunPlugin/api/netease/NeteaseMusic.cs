@@ -96,6 +96,82 @@ namespace YunPlugin.api.netease
         }
     }
 
+    public class NeteasePodcastInfo : MusicInfo
+    {
+        private HttpClientWrapper httpClient;
+        private string programId;
+
+        public override string ArtistUrl => "https://music.163.com/#/artist?id={0}";
+
+        public NeteasePodcastInfo(HttpClientWrapper httpClient, string programId, bool inPlayList = true) : base(programId, inPlayList)
+        {
+            this.httpClient = httpClient;
+            this.programId = programId;
+        }
+
+        public async override Task InitMusicInfo()
+        {
+            if (!string.IsNullOrEmpty(Name) && !string.IsNullOrEmpty(Image))
+            {
+                return;
+            }
+            try
+            {
+                ProgramDetail detail = await httpClient.Get<ProgramDetail>(
+                    "/dj/program/detail",
+                    new Dictionary<string, string> { { "id", programId } }
+                );
+                
+                if (detail == null || detail.program == null || detail.program.mainSong == null)
+                {
+                     Name = "播客信息获取失败";
+                     return;
+                }
+
+                var song = detail.program.mainSong;
+                Id = song.id.ToString(); // Store internal song ID for URL fetching
+                Name = song.name;
+                Image = song.album.picUrl;
+                DetailUrl = $"https://music.163.com/#/program?id={programId}";
+
+                Author.Clear();
+                if (song.artists != null)
+                {
+                    foreach (var artist in song.artists)
+                    {
+                        if (!string.IsNullOrEmpty(artist.name))
+                        {
+                            Author.Add(artist.name, artist.id.ToString());
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "NeteasePodcastInfo InitMusicInfo error");
+                Name = "播客获取失败!\n" + e.Message;
+            }
+        }
+
+        public async override Task<string> GetMusicUrl()
+        {
+            // Id here is the mainSong ID set in InitMusicInfo
+            MusicURL musicURL = await httpClient.Get<MusicURL>(
+                    "/song/url",
+                    new Dictionary<string, string> { { "id", Id } }
+                );
+            if (musicURL.data == null || musicURL.data.Length == 0)
+            {
+                return "error: 获取链接失败";
+            }
+            if (musicURL.data[0].freeTrialInfo != null)
+            {
+                return "error:付费内容";
+            }
+            return musicURL.data[0].url;
+        }
+    }
+
     public class NeteaseMusic : MusicApi<NeteaseConfig>
     {
         public override string Name => "云音乐";
@@ -179,8 +255,12 @@ namespace YunPlugin.api.netease
             }, null, TimeSpan.Zero.Milliseconds, TimeSpan.FromMinutes(config.CookieUpdateIntervalMin).Milliseconds);
         }
 
-        public override Task<MusicInfo> GetMusicInfo(string id)
+        public override Task<MusicInfo> GetMusicInfo(string id, MusicUrlType type = MusicUrlType.Music)
         {
+            if (type == MusicUrlType.Podcast)
+            {
+                return Task.FromResult<MusicInfo>(new NeteasePodcastInfo(httpClient, id, false));
+            }
             return Task.FromResult<MusicInfo>(new NeteaseMusicInfo(httpClient, id, false));
         }
 
@@ -235,6 +315,11 @@ namespace YunPlugin.api.netease
 
         public override async Task<PlayListMeta> GetPlayList(string id, int limit)
         {
+            if (id.StartsWith("radio_"))
+            {
+                return await GetRadioList(id.Substring(6), limit);
+            }
+
             var playListInfo = await httpClient.Get<PlayListInfo>(
                     "/playlist/detail",
                     new Dictionary<string, string> { { "id", id } }
@@ -341,6 +426,66 @@ namespace YunPlugin.api.netease
             }
 
             return new PlayListMeta(id, name, $"https://music.163.com/#/playlist?id={id}", imgUrl, musicInfos);
+        }
+
+        private async Task<PlayListMeta> GetRadioList(string id, int limit)
+        {
+            var djDetail = await httpClient.Get<DjDetail>("/dj/detail", new Dictionary<string, string> { { "rid", id } });
+            string name = "电台";
+            string imgUrl = "";
+            if (djDetail != null && djDetail.data != null)
+            {
+                name = djDetail.data.name;
+                imgUrl = djDetail.data.picUrl;
+            }
+
+            try { await RunOnMainThread(() => ts3Client.ChangeDescription(name)); } catch { }
+            try
+            {
+                await RunOnMainThread(() => MainCommands.CommandBotAvatarSet(ts3Client, imgUrl));
+            }
+            catch (Exception e)
+            {
+                LogError(e, "Set avatar error");
+            }
+            try { await RunOnMainThread(() => ts3Client.SendChannelMessage($"开始添加电台 [{name}]")); } catch { }
+
+            int fetchLimit = limit == 0 ? 1000 : limit; 
+            
+            var programResult = await httpClient.Get<DjProgramResult>("/dj/program", new Dictionary<string, string> { { "rid", id }, { "limit", fetchLimit.ToString() } });
+            
+            List<MusicInfo> musicInfos = new List<MusicInfo>();
+            if (programResult != null && programResult.programs != null)
+            {
+                foreach (var p in programResult.programs)
+                {
+                    var info = new NeteasePodcastInfo(httpClient, p.id.ToString());
+                    if (p.mainSong != null)
+                    {
+                        info.Name = !string.IsNullOrEmpty(p.name) ? p.name : p.mainSong.name;
+                        info.Id = p.mainSong.id.ToString(); 
+                        
+                        if (p.mainSong.album != null)
+                            info.Image = p.mainSong.album.picUrl;
+                            
+                        if (p.mainSong.artists != null)
+                        {
+                            foreach(var ar in p.mainSong.artists)
+                                info.Author.Add(ar.name, ar.id.ToString());
+                        }
+                        
+                        info.DetailUrl = $"https://music.163.com/#/program?id={p.id}";
+                    }
+                    else
+                    {
+                        info.Name = p.name;
+                    }
+                    
+                    musicInfos.Add(info);
+                }
+            }
+
+            return new PlayListMeta(id, name, $"https://music.163.com/#/djradio?id={id}", imgUrl, musicInfos);
         }
 
         public async Task<string> GetLoginKey()
@@ -577,6 +722,18 @@ namespace YunPlugin.api.netease
             else if (data.Contains("album"))
             {
                 result.Type = MusicUrlType.Album;
+                result.Id = ExtractIdFromAddress(data);
+                result.Url = data;
+            }
+            else if (data.Contains("djradio"))
+            {
+                result.Type = MusicUrlType.PlayList;
+                result.Id = "radio_" + ExtractIdFromAddress(data);
+                result.Url = data;
+            }
+            else if (data.Contains("program") || data.Contains("dj"))
+            {
+                result.Type = MusicUrlType.Podcast;
                 result.Id = ExtractIdFromAddress(data);
                 result.Url = data;
             }

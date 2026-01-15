@@ -308,4 +308,54 @@ namespace YunPlugin.api.netease
         public VIPData data { get; set; }
         public int code { get; set; }
     }
+
+    public class ProgramDetail
+    {
+        public int code { get; set; }
+        public Program program { get; set; }
+    }
+
+    public class DjProgramResult
+    {
+        public int code { get; set; }
+        public Program[] programs { get; set; }
+    }
+
+    public class Program
+    {
+        public long id { get; set; }
+        public string name { get; set; }
+        public ProgramSong mainSong { get; set; }
+    }
+
+    public class ProgramSong
+    {
+        public long id { get; set; }
+        public string name { get; set; }
+        public ProgramAlbum album { get; set; }
+        public ProgramArtist[] artists { get; set; }
+    }
+
+    public class ProgramAlbum
+    {
+        public string picUrl { get; set; }
+    }
+
+    public class ProgramArtist
+    {
+        public long id { get; set; }
+        public string name { get; set; }
+    }
+
+    public class DjDetail
+    {
+        public int code { get; set; }
+        public DjDetailData data { get; set; }
+    }
+
+    public class DjDetailData
+    {
+        public string name { get; set; }
+        public string picUrl { get; set; }
+    }
 }
