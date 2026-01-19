@@ -357,7 +357,7 @@ namespace YunPlugin.api.qq
             {
                 return "参数错误 [set|get] {cookie|uin}";
             }
-            if (type == "set")
+            if (type == "set" || type == "cookie")
             {
                 var cookie = Utils.ProcessCookie(data);
                 var cookieDict = Utils.CookieToDict(cookie);
@@ -405,7 +405,7 @@ namespace YunPlugin.api.qq
                     return $"获取失败 [{result.result}] {result.message}";
                 }
             }
-            return "参数错误 [set|get] {cookie|uin}";
+            return "参数错误 [set|cookie|get] {cookie|uin}";
         }
 
         public override void Refresh(QQMusicConfig config)

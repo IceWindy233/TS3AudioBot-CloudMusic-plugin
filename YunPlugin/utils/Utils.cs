@@ -124,7 +124,9 @@ public static class Utils
 
     public static string[] ProcessArgs(string args)
     {
-        return args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // 使用正则表达式来解析参数，支持双引号包裹的内容
+        var matches = Regex.Matches(args, @"(?<match>[^""\s]+)|""(?<match>[^""]*)""");
+        return matches.Cast<Match>().Select(m => m.Groups["match"].Value).ToArray();
     }
 
     public static string RemoveBBCode(string str)

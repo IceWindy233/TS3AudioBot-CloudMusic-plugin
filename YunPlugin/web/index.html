@@ -107,6 +107,11 @@
             
             <h3 style='font-size:1rem; margin-top:0'>快速点歌</h3>
             <div class='input-group'>
+                <select id='sourceSelect' style='flex:0 0 90px;'>
+                    <option value=''>默认源</option>
+                    <option value='Netease'>网易云</option>
+                    <option value='QQMusic'>QQ音乐</option>
+                </select>
                 <select id='playType' style='flex:0 0 100px;'>
                     <option value='auto'>自动识别</option>
                     <option value='song'>单曲</option>
@@ -297,8 +302,8 @@
         }
 
         function cmd(action) {
-            const q = document.getElementById('query').value;
-            if (action !== 'reload' && !q) { showToast('请输入内容', false); return; }
+            const qInput = document.getElementById('query').value;
+            if (action !== 'reload' && !qInput) { showToast('请输入内容', false); return; }
             
             let type = action;
             if (action === 'play' || action === 'add') {
@@ -306,8 +311,14 @@
                 type = action + '_' + subType;
             }
 
+            let finalQuery = qInput;
+            const source = document.getElementById('sourceSelect').value;
+            if (source && action !== 'reload') {
+                finalQuery = source + ' ' + finalQuery;
+            }
+
             let url = '/api/cmd?type=' + type;
-            if (q) url += '&query=' + encodeURIComponent(q);
+            if (qInput) url += '&query=' + encodeURIComponent(finalQuery);
 
             fetchAPI(url, { method: 'POST' })
                 .then(r => r.json())
@@ -325,13 +336,11 @@
 
         function doLogin() {
             const platform = document.getElementById('loginPlatform').value;
-            let args = '';
-
             let c = document.getElementById('inp_cookie').value;
             if(!c) { showToast('请输入Cookie', false); return; }
-            // Escape quotes if needed
-            c = c.replace(/"/g, "'"); 
-            args = 'cookie "' + c + '"';
+
+            // 直接发送，后端 ProcessArgs 现在能处理引号了
+            const args = 'cookie "' + c + '"';
 
             showToast('登录中...', true);
             fetchAPI('/api/login', { 
