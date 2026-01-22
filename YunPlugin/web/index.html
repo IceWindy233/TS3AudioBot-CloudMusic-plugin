@@ -57,6 +57,16 @@
         .modal { background: white; padding: 20px; border-radius: 8px; width: 300px; text-align: center; }
         .modal input { width: 90%; margin: 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
         .modal button { width: 100%; }
+
+        /* Search Results */
+        .result-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .result-item img { width: 50px; height: 50px; border-radius: 4px; margin-right: 10px; object-fit: cover; }
+        .result-info { flex: 1; min-width: 0; }
+        .result-title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+        .result-artist { font-size: 0.85rem; color: #666; margin-top: 2px; }
+        .result-actions { display: flex; gap: 5px; }
+        .tag.netease { background: #c20c0c; }
+        .tag.qq { background: #31c27c; }
     </style>
 </head>
 <body>
@@ -76,8 +86,23 @@
         
         <div class='tabs'>
             <div class='tab active' onclick='switchTab("main")'>播放控制</div>
+            <div class='tab' onclick='switchTab("search")'>聚合搜索</div>
             <div class='tab' onclick='switchTab("list")'>播放列表</div>
             <div class='tab' onclick='switchTab("system")'>系统管理</div>
+        </div>
+
+        <!-- Search Tab -->
+        <div id='tab-search' class='tab-content'>
+            <div class='input-group'>
+                <select id='searchType' style='flex:0 0 80px;'>
+                    <option value='song'>单曲</option>
+                    <option value='playlist'>歌单</option>
+                    <option value='album'>专辑</option>
+                </select>
+                <input type='text' id='searchInput' placeholder='同时搜索网易云和QQ音乐...' onkeydown='if(event.key==="Enter") doSearch()'>
+                <button onclick='doSearch()'>搜索</button>
+            </div>
+            <div id='searchResults' style='max-height: 500px; overflow-y: auto;'></div>
         </div>
 
         <!-- Main Tab -->
@@ -213,9 +238,10 @@
             
             const tabs = document.querySelectorAll('.tab');
             if(tabName=='main') tabs[0].classList.add('active');
-            if(tabName=='list') tabs[1].classList.add('active');
+            if(tabName=='search') tabs[1].classList.add('active');
+            if(tabName=='list') tabs[2].classList.add('active');
             if(tabName=='system') { 
-                tabs[2].classList.add('active');
+                tabs[3].classList.add('active');
                 updateSystemStatus(); 
             }
             
@@ -228,6 +254,80 @@
             el.className = success ? 'msg-success' : 'msg-error';
             el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 8000);
+        }
+
+        // Search Functions
+        function doSearch() {
+            const q = document.getElementById('searchInput').value;
+            const type = document.getElementById('searchType').value;
+            if(!q) { showToast('请输入搜索内容', false); return; }
+            
+            const container = document.getElementById('searchResults');
+            container.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">正在全网搜索...</div>';
+
+            fetchAPI(`/api/search?q=${encodeURIComponent(q)}&type=${type}`)
+                .then(r => r.json())
+                .then(d => {
+                    if(d.success) {
+                        renderSearchResults(d.data, type);
+                    } else {
+                        container.innerHTML = `<div style="text-align:center;padding:20px;color:red;">${d.error}</div>`;
+                    }
+                })
+                .catch(e => {
+                    container.innerHTML = `<div style="text-align:center;padding:20px;color:red;">请求失败</div>`;
+                });
+        }
+
+        function renderSearchResults(data, type) {
+            const container = document.getElementById('searchResults');
+            container.innerHTML = '';
+            if(!data || data.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">未找到相关结果</div>';
+                return;
+            }
+
+            data.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'result-item';
+                
+                const sourceTag = item.source === 'Netease' ? '<span class="tag netease">网易云</span>' : 
+                                  item.source === 'QQMusic' ? '<span class="tag qq">QQ</span>' : 
+                                  '<span class="tag gray">'+item.source+'</span>';
+                                  
+                el.innerHTML = `
+                    <img src="${item.image || ''}" onerror="this.style.display='none'">
+                    <div class="result-info">
+                        <div class="result-title">${item.name} ${sourceTag}</div>
+                        <div class="result-artist">${item.artist || ''}</div>
+                    </div>
+                    <div class="result-actions">
+                        <button onclick="playItem('${item.source}', '${item.id}', '${type}', false)" class="secondary" style="padding:6px 12px;font-size:0.8rem;">播放</button>
+                        <button onclick="playItem('${item.source}', '${item.id}', '${type}', true)" style="padding:6px 12px;font-size:0.8rem;">+</button>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        function playItem(source, id, type, isAdd) {
+            let cmdType = isAdd ? 'add' : 'play';
+            if(type === 'playlist') cmdType += '_list';
+            if(type === 'album') cmdType += '_album';
+            
+            const query = `${source} ${id}`;
+            showToast(`正在请求: ${source} ${id}`, true);
+            
+            fetchAPI('/api/cmd?type=' + cmdType + '&query=' + encodeURIComponent(query), { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(data.msg || '操作成功', true);
+                        if(!isAdd) updateStatus();
+                    } else {
+                        showToast(data.error, false);
+                    }
+                });
         }
 
         function updateStatus() {

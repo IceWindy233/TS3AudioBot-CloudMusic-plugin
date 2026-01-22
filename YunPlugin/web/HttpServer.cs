@@ -194,6 +194,9 @@ namespace YunPlugin.web
                     case "/api/login":
                          if (req.HttpMethod == "POST") response = await HandleLogin(req);
                          break;
+                    case "/api/search":
+                         if (req.HttpMethod == "GET") response = await HandleSearch(req);
+                         break;
                     default:
                         context.Response.StatusCode = 404;
                         response = new { error = "Endpoint not found" };
@@ -271,6 +274,8 @@ namespace YunPlugin.web
             string type = req.QueryString["type"];
             string query = req.QueryString["query"];
 
+            global::YunPlugin.YunPlugin.GetLogger("Web").Info($"Cmd received: type={type}, query={query}");
+
             if (type == "reload")
             {
                 return new { success = true, msg = _yunService.ReloadConfig() };
@@ -285,12 +290,61 @@ namespace YunPlugin.web
             {
                 try 
                 {
-                    var input = _yunService.ProcessArgs(query, 2);
-                    string err = null;
-                    bool isAdd = type.StartsWith("add");
+                    // Define subType early so it can be used in the manual parsing block
                     string subType = type.Split('_').Length > 1 ? type.Split('_')[1] : "auto";
 
-                    if (subType == "song" || subType == "podcast" || subType == "auto" && !isAdd) 
+                    // Manual parsing to avoid "Limit" ambiguity in ProcessArgs
+                    var argsParts = query.Split(new[] { ' ' }, 2);
+                    var input = new CommandArgs();
+                    
+                    if (argsParts.Length == 2)
+                    {
+                        var apiName = argsParts[0];
+                        var data = argsParts[1];
+                        var apiContainer = _yunService.GetApiConfig(apiName); // Need to expose GetApiConfig in YunService or access Config directly
+
+                        if (apiContainer != null && apiContainer.Enable)
+                        {
+                            input.Api = _yunService.GetApiInterface(apiContainer.Type); // Need to expose GetApiInterface
+                            input.Data = data;
+                            input.InputData = input.Api.GetInputData(data);
+
+                            // Force correct type for explicit commands from WebUI
+                            if (subType == "album") 
+                            {
+                                input.InputData.Type = global::YunPlugin.api.MusicUrlType.Album;
+                                input.InputData.Id = data;
+                            }
+                            else if (subType == "list") 
+                            {
+                                input.InputData.Type = global::YunPlugin.api.MusicUrlType.PlayList;
+                                input.InputData.Id = data;
+                            }
+                            else if (subType == "song")
+                            {
+                                // Force Music type for songs to avoid issues with QQ Music IDs being misidentified
+                                input.InputData.Type = global::YunPlugin.api.MusicUrlType.Music;
+                                input.InputData.Id = data;
+                            }
+                        }
+                        else
+                        {
+                            // Fallback to ProcessArgs if API not found (e.g. pure search query)
+                            input = _yunService.ProcessArgs(query, 2);
+                        }
+                    }
+                    else
+                    {
+                         input = _yunService.ProcessArgs(query, 2);
+                    }
+
+                    string err = null;
+                    bool isAdd = type.StartsWith("add");
+
+                    // Logging for debug
+                    global::YunPlugin.YunPlugin.GetLogger("Web").Info($"Executing {type}: Api={input.Api?.Name}, Data={input.Data}, Type={input.InputData?.Type}");
+
+                    if (subType == "song" || subType == "podcast" || subType == "auto") 
                     {
                         err = isAdd ? await _yunService.Add(input) : await _yunService.Play(input);
                     }
@@ -301,10 +355,6 @@ namespace YunPlugin.web
                     else if (subType == "album")
                     {
                         err = await _yunService.PlayAlbum(input, isAdd);
-                    }
-                    else if (isAdd) // default add for auto
-                    {
-                        err = await _yunService.Add(input);
                     }
 
                     if (err == null || (!err.Contains("失败") && !err.Contains("未找到") && !err.Contains("错误")))
@@ -352,6 +402,31 @@ namespace YunPlugin.web
                 {
                     return new { success = false, error = ex.Message };
                 }
+            }
+        }
+
+        private async Task<object> HandleSearch(HttpListenerRequest req)
+        {
+            string keyword = req.QueryString["q"];
+            string type = req.QueryString["type"] ?? "song";
+            string limitStr = req.QueryString["limit"] ?? "10";
+            if (!int.TryParse(limitStr, out int limit)) limit = 10;
+            if (limit <= 0) limit = 10;
+            if (limit > 50) limit = 50;
+
+            if (string.IsNullOrWhiteSpace(keyword))
+            {
+                return new { success = false, error = "请输入搜索关键词" };
+            }
+
+            try
+            {
+                var results = await _yunService.SearchAll(keyword, type, limit);
+                return new { success = true, data = results };
+            }
+            catch(Exception ex)
+            {
+                return new { success = false, error = ex.Message };
             }
         }
 

@@ -207,7 +207,11 @@ namespace YunPlugin.api.qq
                 throw new Exception($"获取专辑信息失败 [{info.result}] {info.errMsg}");
             }
             var name = info.data.name;
-            var image = info.data.headpiclist[0].picurl;
+            var image = "";
+            if (info.data.headpiclist != null && info.data.headpiclist.Count > 0)
+            {
+                image = info.data.headpiclist[0].picurl;
+            }
 
             var musics = await httpClient.Get<Result<AlbumData>>("/album/songs", new Dictionary<string, string> { { "albummid", id } });
             if (musics == null || musics.result != 100 || musics.data == null)
@@ -231,21 +235,24 @@ namespace YunPlugin.api.qq
             }
 
             var musicList = new List<MusicInfo>();
-            foreach (var song in musics.data.list)
+            if (musics.data.list != null)
             {
-                var musicInfo = new QQMusicInfo(httpClient, song.mid);
-                musicInfo.Name = song.name;
-                if (song.singer != null)
+                foreach (var song in musics.data.list)
                 {
-                    foreach (var s in song.singer)
+                    var musicInfo = new QQMusicInfo(httpClient, song.mid);
+                    musicInfo.Name = song.name;
+                    if (song.singer != null)
                     {
-                        if (!string.IsNullOrEmpty(s.name) && !musicInfo.Author.ContainsKey(s.name))
+                        foreach (var s in song.singer)
                         {
-                            musicInfo.Author.Add(s.name, s.mid);
+                            if (!string.IsNullOrEmpty(s.name) && !musicInfo.Author.ContainsKey(s.name))
+                            {
+                                musicInfo.Author.Add(s.name, s.mid);
+                            }
                         }
                     }
+                    musicList.Add(musicInfo);
                 }
-                musicList.Add(musicInfo);
             }
             return new PlayListMeta(id, name, $"https://y.qq.com/n/ryqq/albumDetail/{id}", image, musicList);
         }

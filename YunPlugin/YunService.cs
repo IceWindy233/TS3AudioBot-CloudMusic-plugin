@@ -31,7 +31,7 @@ namespace YunPlugin
             _player = player;
         }
 
-        private IMusicApiInterface GetApiInterface(MusicApiType type = MusicApiType.None)
+        public IMusicApiInterface GetApiInterface(MusicApiType type = MusicApiType.None)
         {
             if (type == MusicApiType.None)
             {
@@ -42,6 +42,11 @@ namespace YunPlugin
                 throw new CommandException("未找到对应的API", CommandExceptionReason.CommandError);
             }
             return _musicApis[type];
+        }
+
+        public ApiContainer GetApiConfig(string name)
+        {
+            return _config.GetApiConfig(name);
         }
 
         public IMusicApiInterface GetApiByArgs(CommandArgs args)
@@ -347,6 +352,76 @@ namespace YunPlugin
                 });
             }
             return list;
+        }
+
+        public async Task<object> SearchAll(string keyword, string type, int limit)
+        {
+            var allResults = new List<object>();
+
+            foreach (var api in _musicApis)
+            {
+                try
+                {
+                    List<object> apiResults = new List<object>();
+                    if (type == "song")
+                    {
+                        var songs = await api.Value.SearchMusic(keyword, limit);
+                        foreach (var s in songs)
+                        {
+                            apiResults.Add(new
+                            {
+                                source = api.Key.ToString(),
+                                id = s.Id,
+                                name = s.Name,
+                                artist = s.GetAuthor(),
+                                image = s.Image,
+                                type = "song"
+                            });
+                        }
+                    }
+                    else if (type == "playlist")
+                    {
+                        var playlists = await api.Value.SearchPlaylist(keyword, limit);
+                        foreach (var p in playlists)
+                        {
+                            apiResults.Add(new
+                            {
+                                source = api.Key.ToString(),
+                                id = p.Id,
+                                name = p.Name,
+                                artist = "",
+                                image = p.Image,
+                                type = "playlist"
+                            });
+                        }
+                    }
+                    else if (type == "album")
+                    {
+                        var albums = await api.Value.SearchAlbum(keyword, limit);
+                        foreach (var a in albums)
+                        {
+                            apiResults.Add(new
+                            {
+                                source = api.Key.ToString(),
+                                id = a.Id,
+                                name = a.Name,
+                                artist = "",
+                                image = a.Image,
+                                type = "album"
+                            });
+                        }
+                    }
+                    
+                    Log.Info($"Search result from {api.Key}: {apiResults.Count} items.");
+                    allResults.AddRange(apiResults);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, $"Search failed for {api.Key}");
+                }
+            }
+
+            return allResults;
         }
         
         public object GetPlaybackStatus()
