@@ -317,7 +317,7 @@ namespace YunPlugin.api.qq
         public int followflag { get; set; }
         public int isVip { get; set; }
         public string name { get; set; }
-        public int qq { get; set; }
+        public long qq { get; set; }
         public int singerid { get; set; }
         public string singermid { get; set; }
         public int type { get; set; }
