@@ -205,6 +205,12 @@ namespace YunPlugin.api.qq
         public List<int> vi { get; set; }
         public string ktag { get; set; }
         public List<double> vf { get; set; }
+
+        public int size128 { get; set; }
+        public int size320 { get; set; }
+        public int sizeape { get; set; }
+        public int sizeflac { get; set; }
+        public string strMediaMid { get; set; }
     }
 
     public class SongInfo

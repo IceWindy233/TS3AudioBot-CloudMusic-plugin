@@ -37,6 +37,8 @@ namespace YunPlugin.api.qq
     public class QQMusicInfo : MusicInfo
     {
         private HttpClientWrapper httpClient;
+        private string _quality = "128";
+        private string _mediaId;
 
         public override string ArtistUrl => "https://y.qq.com/n/ryqq/singer/{0}";
 
@@ -47,9 +49,15 @@ namespace YunPlugin.api.qq
 
         public override async Task<string> GetMusicUrl()
         {
+            var param = new Dictionary<string, string> { { "id", Id }, { "type", _quality } };
+            if (!string.IsNullOrEmpty(_mediaId))
+            {
+                param.Add("mediaId", _mediaId);
+            }
+
             var musicURL = await httpClient.Get<Result<string>>(
                     "/song/url",
-                    new Dictionary<string, string> { { "id", Id } }
+                    param
                 );
             if (musicURL == null || musicURL.result != 100 || musicURL.data == null)
             {
@@ -79,6 +87,12 @@ namespace YunPlugin.api.qq
                 Name = musicInfo.data.track_info.name;
                 Image = $"https://y.gtimg.cn/music/photo_new/T002R300x300M000{musicInfo.data.track_info.album.mid}.jpg";
                 DetailUrl = $"https://y.qq.com/n/ryqq/songDetail/{Id}";
+
+                if (musicInfo.data.track_info.sizeflac > 0) _quality = "flac";
+                else if (musicInfo.data.track_info.size320 > 0) _quality = "320";
+                else _quality = "128";
+
+                _mediaId = musicInfo.data.track_info.strMediaMid;
 
                 Author.Clear();
 
